@@ -13,6 +13,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 from . import api, languages, releases
 
 SYNC_SCORE = 90
+MAX_LANGUAGE_SEARCHES = 6  # each costs the viewer's key a request and the viewer a moment
 
 
 @dataclass
@@ -183,6 +184,26 @@ def ordered_codes(languages_wanted: Sequence[str], preferred: Sequence[str]) -> 
     ordered: List[str] = [code for code in preferred if code in languages_wanted]
     ordered += [code for code in languages_wanted if code not in ordered]
     return ordered
+
+
+def language_groups(codes: Sequence[str], limit: int = MAX_LANGUAGE_SEARCHES) -> List[List[str]]:
+    """The codes split into one search per Kodi language, in order.
+
+    SubDL lists every language of a search together, newest first, so a language with
+    many subtitles pushes the others many pages back. Codes that are one Kodi language
+    ("ZH" and "ZH_BG") stay together, and languages past ``limit`` share the last search.
+    """
+    groups: List[List[str]] = []
+    for code in codes:
+        for group in groups:
+            if languages.same_language(code, group[0]):
+                group.append(code)
+                break
+        else:
+            groups.append([code])
+    if len(groups) > limit:
+        groups[limit - 1:] = [[code for group in groups[limit - 1:] for code in group]]
+    return groups
 
 
 def page_count(body: Dict) -> int:

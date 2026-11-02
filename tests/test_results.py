@@ -111,5 +111,19 @@ class EpisodeTest(unittest.TestCase):
         self.assertEqual(results.build_entries(rows, ["EN"], target=self.TARGET, include_packs=False), [])
 
 
+class LanguageGroupsTest(unittest.TestCase):
+    def test_one_search_per_kodi_language(self):
+        self.assertEqual(results.language_groups(["FA", "EN"]), [["FA"], ["EN"]])
+        self.assertEqual(results.language_groups(["EN", "ZH", "ZH_BG", "SR", "SR_CYRL"]),
+                         [["EN"], ["ZH", "ZH_BG"], ["SR", "SR_CYRL"]])
+
+    def test_languages_past_the_limit_share_the_last_search(self):
+        self.assertEqual(results.language_groups(["EN", "FR", "FR_CA", "DE", "ES"], limit=2),
+                         [["EN"], ["FR", "FR_CA", "DE", "ES"]])
+        codes = ["EN", "FA", "AR", "DE", "ES", "IT"]
+        self.assertEqual(len(results.language_groups(codes)), 6)
+        self.assertEqual(results.language_groups(codes + ["PT"])[-1], ["IT", "PT"])
+
+
 if __name__ == "__main__":
     unittest.main()

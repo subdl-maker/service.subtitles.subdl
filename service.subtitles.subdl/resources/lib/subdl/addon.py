@@ -125,14 +125,16 @@ def search(addon, handle: int, params: dict) -> None:
 def find(subdl: api.SubDLClient, plan: List[query.Attempt], wanted: List[str], video: str,
          hearing: int, packs: bool) -> Tuple[List[results.Entry], Optional[tuple]]:
     """Run the plan until one attempt finds a title; that title's rows, best first."""
+    groups = results.language_groups(wanted)
     for attempt in plan:
-        params = dict(attempt.params, languages=",".join(wanted), subs_per_page=str(api.PAGE_SIZE), releases="1")
+        params = dict(attempt.params, subs_per_page=str(api.PAGE_SIZE), releases="1")
         if attempt.episode is not None and packs:
             params["unpack"] = "1"
         if hearing == results.HI_HIDE:
             params["hi"] = "0"
         elif hearing == results.HI_ONLY:
             params["hi"] = "1"
+        params["languages"] = ",".join(groups[0])
         body = subdl.search(params)
         if api.is_title_miss(body):
             log("search by %s: no title" % attempt.kind)
@@ -140,21 +142,37 @@ def find(subdl: api.SubDLClient, plan: List[query.Attempt], wanted: List[str], v
         if not year_matches(body, attempt.expect_year):
             log("search by %s: found a title from another year" % attempt.kind)
             continue
-        rows = list(body.get("subtitles") or [])
-        entries = results.build_entries(rows, wanted, video, attempt.episode, packs, hearing)
-        if video and not results.has_sync(entries) and results.page_count(body) > 1:
-            # Results come newest first; the release being played may be older.
+
+        kept = (subdl, params, video, attempt.episode, packs, hearing)
+        rows = language_rows(groups[0], body, *kept)
+        for group in groups[1:]:
             try:
-                more = subdl.search(dict(params, page="2"))
-            except SubDLError as error:  # keep the first page whatever happens here
-                log("search page 2: %s" % error.kind)
-                more = {}
-            if more.get("status") is True:
-                rows += list(more.get("subtitles") or [])
-                entries = results.build_entries(rows, wanted, video, attempt.episode, packs, hearing)
+                answer = subdl.search(dict(params, languages=",".join(group)))
+            except SubDLError as error:  # keep the languages already found
+                log("search next language: %s" % error.kind)
+                break
+            rows += language_rows(group, answer, *kept)
+        entries = results.build_entries(rows, wanted, video, attempt.episode, packs, hearing)
         log("search by %s: %d results, %d listed" % (attempt.kind, len(rows), len(entries)))
         return entries, attempt.episode
     return [], None
+
+
+def language_rows(group: List[str], first: dict, subdl: api.SubDLClient, params: dict, video: str,
+                  episode: Optional[tuple], packs: bool, hearing: int) -> List[dict]:
+    """One language's rows: its first page, and its second if that has no exact release."""
+    rows = list(first.get("subtitles") or [])
+    entries = results.build_entries(rows, group, video, episode, packs, hearing)
+    if video and not results.has_sync(entries) and results.page_count(first) > 1:
+        # Results come newest first; the release being played may be older.
+        try:
+            more = subdl.search(dict(params, languages=",".join(group), page="2"))
+        except SubDLError as error:  # keep the first page whatever happens here
+            log("search page 2: %s" % error.kind)
+            more = {}
+        if more.get("status") is True:
+            rows += list(more.get("subtitles") or [])
+    return rows
 
 
 def year_matches(body: dict, expected: Optional[int]) -> bool:

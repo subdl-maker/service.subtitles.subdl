@@ -13,7 +13,10 @@ is left before it goes to Kodi's official repository.
 ## What the viewer gets
 
 - Kodi's subtitle dialog lists SubDL subtitles in the languages chosen in Kodi's
-  own subtitle settings, the preferred language first.
+  own subtitle settings, the preferred language first. Kodi's default is English
+  only: Settings → Player → Subtitles → "Languages to download subtitles for".
+  Each language gets its own search, up to six, because SubDL lists a multi-language
+  search newest first and English would push the rest many pages back.
 - The title is found by IMDb id, then TMDB id, then its name, then the name of the
   file being played. For a TV episode the show's ids come from Kodi's library.
 - A subtitle made for the exact release being played gets Kodi's "sync" mark and

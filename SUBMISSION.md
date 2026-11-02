@@ -6,12 +6,12 @@ branch **`matrix`**.
 
 ## Checklist
 
-- [x] Decide the version: **1.0.0** (decided 2026-11-01) (§1.1)
+- [x] Decide the version: **1.0.x**, below Duy's 2.0.1 (decided 2026-11-01); 1.0.1 since 2026-11-02 (§1.1)
 - [x] Licence: **keep MIT** (decided 2026-11-01) (§1.2)
 - [x] Public source repository: **`subdl-maker/service.subtitles.subdl`** (2026-11-01; `<source>` changed from `subdlcom`, which `subdl-maker` cannot create repos in) (§1.3)
 - [x] Test once in Kodi with a real free key (§2): 2026-11-01, `e2e/run.sh … live`, 8/8 on Kodi 21.2 and 19.4; found the Windows-1256 garbling (README)
 - [x] `sh scripts/check.sh`: tests green, zip built, checker "no problems" (2026-11-01)
-- [x] Fork `xbmc/repo-scripts`, one commit `[service.subtitles.subdl] 1.0.0` on branch `matrix`, open the PR with the text in §3
+- [x] Fork `xbmc/repo-scripts`, one commit `[service.subtitles.subdl] 1.0.1` on branch `matrix`, open the PR with the text in §3
 - [ ] Answer the automated (Greptile) and human review on the PR (§4)
 - [ ] Optional: a Kodi forum thread for support, then add `<forum>` to `addon.xml` (§1.6)
 

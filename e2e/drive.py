@@ -354,6 +354,8 @@ def live_rows_and_download(video, label):
     note("live %s rows" % label, rows)
     check("live %s: SubDL lists subtitles in Kodi's languages" % label,
           rows and all(row["Label"] in ("Persian", "English") for row in rows), [row["Label"] for row in rows])
+    check("live %s: both of Kodi's languages are listed" % label,
+          {row["Label"] for row in rows} == {"Persian", "English"}, sorted({row["Label"] for row in rows}))
     take_first_row()
     new = wait_for(lambda: saved_subtitles(video), 30) or []
     check("live %s: Kodi saved the first row's subtitle next to the video" % label, new,

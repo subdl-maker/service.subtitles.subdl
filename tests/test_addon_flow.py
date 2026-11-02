@@ -66,11 +66,12 @@ class SearchTest(FlowTest):
                 subtitle(2, language="FA", release_name="The.Matrix.1999.720p.WEB-DL-OTHER"),
                 subtitle(3, language="FA", release_name=MATRIX, hi=True)]
         transport = self.run_addon("action=search&languages=English%2cPersian&preferredlanguage=Persian",
-                                   response(200, search_body(rows)))
+                                   response(200, search_body(rows[1:])), response(200, search_body(rows[:1])))
 
-        self.assertEqual(transport.query(), {
-            "type": "movie", "imdb_id": "tt0133093", "languages": "FA,EN", "subs_per_page": "30",
+        self.assertEqual(transport.query(0), {
+            "type": "movie", "imdb_id": "tt0133093", "languages": "FA", "subs_per_page": "30",
             "releases": "1", "api_key": KEY, "client": "kodi"})
+        self.assertEqual(transport.query(1)["languages"], "EN")
         self.assertEqual(transport.requests[0].get_header("User-agent"),
                          "SubDL-Kodi/1.0.0 (service.subtitles.subdl; Kodi/21.2; Linux)")
         rows_shown = [(item["listitem"].label, item["listitem"].label2) for item in state.items]
@@ -127,6 +128,41 @@ class SearchTest(FlowTest):
         self.assertEqual(transport.query(1)["page"], "2")
         self.assertEqual(len(transport.requests), 2)
         self.assertEqual(self.row_link()["path"], "/subtitle/2-1002.zip")
+
+    def test_each_language_gets_its_own_search_so_english_cannot_crowd_it_out(self):
+        self.play_film()
+        english = search_body([subtitle(n, language="EN", release_name=MATRIX) for n in range(1, 31)], pages=5)
+        german = search_body([subtitle(99, language="DE", release_name="The.Matrix.1999.720p.WEB-DL-OTHER")])
+        transport = self.run_addon("action=search&languages=English%2cGerman", response(200, english),
+                                   response(200, german))
+        self.assertEqual([transport.query(index)["languages"] for index in range(2)], ["EN", "DE"])
+        self.assertEqual(len(transport.requests), 2)
+        self.assertEqual(state.items[-1]["listitem"].label, "German")
+
+    def test_each_language_reads_its_own_second_page(self):
+        self.play_film()
+        english = search_body([subtitle(1, language="EN", release_name=MATRIX)], pages=3)
+        german = search_body([subtitle(2, language="DE", release_name="Other")], pages=2)
+        german_two = search_body([subtitle(3, language="DE", release_name=MATRIX)], pages=2)
+        transport = self.run_addon("action=search&languages=English%2cGerman", response(200, english),
+                                   response(200, german), response(200, german_two))
+        self.assertEqual([(transport.query(i)["languages"], transport.query(i).get("page")) for i in range(3)],
+                         [("EN", None), ("DE", None), ("DE", "2")])
+        self.assertEqual(len(state.items), 3)
+
+    def test_a_language_with_no_subtitles_leaves_the_others(self):
+        self.play_film()
+        self.run_addon("action=search&languages=Icelandic%2cEnglish", response(200, search_body([])),
+                       response(200, search_body([subtitle(1)])))
+        self.assertEqual([item["listitem"].label for item in state.items], ["English"])
+
+    def test_error_on_a_later_language_keeps_the_rows_already_found(self):
+        self.play_film()
+        limit = {"status": False, "statusCode": 429, "error": "daily_limit", "message": "Daily Limit"}
+        self.run_addon("action=search&languages=English%2cGerman", response(200, search_body([subtitle(1)])),
+                       response(429, limit))
+        self.assertEqual(len(state.items), 1)
+        self.assertEqual(self.messages("ok"), [])
 
     def test_languages_subdl_does_not_have(self):
         self.play_film()

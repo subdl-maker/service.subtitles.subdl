@@ -1,3 +1,6 @@
+1.0.1
+- Searches each language in Kodi's subtitle settings separately, so a language with many subtitles cannot push the others off the list.
+
 1.0.0
 - First release.
 - Searches SubDL by IMDb or TMDB id, by title, season and episode, or by the name of the file being played.
