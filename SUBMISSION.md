@@ -1,6 +1,6 @@
 # Submitting `service.subtitles.subdl` to Kodi's official repository
 
-**Status:** ready to submit, **not submitted**. The single-commit branch is prepared locally in `~/dev/subdl/repo-scripts-kodi` (branch `service.subtitles.subdl`) and the PR text is in `dist/PR_BODY.md`. No pull request, issue or forum post
+**Status:** **submitted 2026-11-01** as [xbmc/repo-scripts#2951](https://github.com/xbmc/repo-scripts/pull/2951), opened by GitHub account `subdl-maker` from its fork (branch `service.subtitles.subdl`; local clone `~/dev/subdl/repo-scripts-kodi`). Public source: https://github.com/subdl-maker/service.subtitles.subdl (a fresh single-commit history, not this repo's). Waiting for review. No pull request, issue or forum post
 has been made. The add-on goes to [`xbmc/repo-scripts`](https://github.com/xbmc/repo-scripts),
 branch **`matrix`**.
 
@@ -9,9 +9,9 @@ branch **`matrix`**.
 - [x] Decide the version: **1.0.0** (decided 2026-11-01) (§1.1)
 - [x] Licence: **keep MIT** (decided 2026-11-01) (§1.2)
 - [x] Public source repository: **`subdl-maker/service.subtitles.subdl`** (2026-11-01; `<source>` changed from `subdlcom`, which `subdl-maker` cannot create repos in) (§1.3)
-- [ ] Test once in Kodi with a real free key (§2)
+- [x] Test once in Kodi with a real free key (§2): 2026-11-01, `e2e/run.sh … live`, 8/8 on Kodi 21.2 and 19.4; found the Windows-1256 garbling (README)
 - [x] `sh scripts/check.sh`: tests green, zip built, checker "no problems" (2026-11-01)
-- [ ] Fork `xbmc/repo-scripts`, one commit `[service.subtitles.subdl] 1.0.0` on branch `matrix`, open the PR with the text in §3
+- [x] Fork `xbmc/repo-scripts`, one commit `[service.subtitles.subdl] 1.0.0` on branch `matrix`, open the PR with the text in §3
 - [ ] Answer the automated (Greptile) and human review on the PR (§4)
 - [ ] Optional: a Kodi forum thread for support, then add `<forum>` to `addon.xml` (§1.6)
 
@@ -67,8 +67,9 @@ What is already verified:
   in for SubDL's API, except one request with a made-up key to the real
   `api.subdl.com`, which checked the refused-key path over real HTTPS.
 
-What is **not** verified: a search and download against the live API with a real
-key. This session had no key and could not create an account. Before submitting:
+Live API: verified 2026-11-01 with a real free key by `e2e/run.sh <image> live`
+on Kodi 21.2 and 19.4 (8 of 8 checks each); README lists what it found. The steps
+below are the same test by hand:
 
 1. In Kodi: **Settings → System → Add-ons → Unknown sources** on.
 2. **Add-ons → Install from zip file** → `dist/service.subtitles.subdl-1.0.0.zip`

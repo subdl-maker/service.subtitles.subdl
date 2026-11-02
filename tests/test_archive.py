@@ -118,6 +118,44 @@ class ChooseTest(unittest.TestCase):
         self.assertEqual(archive.choose([], "Film"), [])
 
 
+class AsUtf8Test(unittest.TestCase):
+    def test_utf8_and_bom_files_are_left_alone(self):
+        utf8 = "باید".encode("utf-8")
+        self.assertEqual(archive.as_utf8(utf8, "FA"), utf8)
+        self.assertEqual(archive.as_utf8(b"\xef\xbb\xbf" + utf8, "FA"), b"\xef\xbb\xbf" + utf8)
+        utf16 = "باید".encode("utf-16")
+        self.assertEqual(archive.as_utf8(utf16, "FA"), utf16)
+        self.assertEqual(archive.as_utf8(SRT, "EN"), SRT)
+
+    def test_each_language_uses_its_code_page(self):
+        for code, text, codec in (
+            ("AR", "مرحبا يا كريم", "cp1256"), ("HE", "שלום", "cp1255"),
+            ("RU", "Привет", "cp1251"), ("SR_CYRL", "Здраво", "cp1251"), ("PL", "Zażółć", "cp1250"),
+            ("EL", "Γειά", "cp1253"), ("TR", "Günaydın", "cp1254"), ("FR", "Déjà vu", "cp1252"),
+            ("BR_PT", "Não", "cp1252"), ("ZH", "你好", "gb18030"), ("ZH_BG", "你們好", "big5"),
+            ("HU_EN", "Árvíztűrő", "cp1250"),
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(archive.as_utf8(text.encode(codec), code), b"\xef\xbb\xbf" + text.encode("utf-8"))
+
+    def test_persian_gets_persian_yeh_and_keheh(self):
+        self.assertEqual(archive.as_utf8("يك كتاب".encode("cp1256"), "FA"), "\ufeffیک کتاب".encode("utf-8"))
+
+    def test_unknown_language_or_undecodable_bytes_are_left_alone(self):
+        legacy = "بايد".encode("cp1256")
+        self.assertEqual(archive.as_utf8(legacy, ""), legacy)
+        self.assertEqual(archive.as_utf8(legacy, "HI"), legacy)
+        self.assertEqual(archive.as_utf8(b"caf\xe9 \x81", "EN"), b"caf\xe9 \x81")
+
+    def test_text_formats(self):
+        self.assertTrue(archive.is_text(SubtitleFile("a.srt", SRT)))
+        self.assertTrue(archive.is_text(SubtitleFile("a.ass", b"[Script Info]")))
+        self.assertTrue(archive.is_text(SubtitleFile("a.sub", b"{10}{20}Hello")))
+        self.assertFalse(archive.is_text(SubtitleFile("a.sub", b"{10}{20}Hello", idx=b"idx")))
+        self.assertFalse(archive.is_text(SubtitleFile("a.sub", b"\x00\x00\x01\xba")))
+        self.assertFalse(archive.is_text(SubtitleFile("a.sup", b"PG")))
+
+
 class WriteTest(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.mkdtemp()
@@ -132,6 +170,20 @@ class WriteTest(unittest.TestCase):
             self.assertEqual(handle.read(), b"sub")
         with open(os.path.join(self.folder, "Film.idx"), "rb") as handle:
             self.assertEqual(handle.read(), b"idx")
+
+    def test_legacy_persian_is_written_as_utf8(self):
+        legacy = "1\r\n00:00:01,000 --> 00:00:02,000\r\nبايد از اينجا برويم.\r\n".encode("cp1256")
+        path = archive.write(SubtitleFile("Film.fa.srt", legacy), self.folder, "FA")
+        with open(path, "rb") as handle:
+            text = handle.read().decode("utf-8-sig")
+        self.assertEqual(text, "1\r\n00:00:01,000 --> 00:00:02,000\r\nباید از اینجا برویم.\r\n")
+
+    def test_binary_subtitles_are_written_as_they_came(self):
+        vobsub = SubtitleFile("Film.sub", b"\x00\x00\x01\xba\xe9", idx=b"idx")
+        with open(archive.write(vobsub, self.folder, "FA"), "rb") as handle:
+            self.assertEqual(handle.read(), b"\x00\x00\x01\xba\xe9")
+        with open(archive.write(SubtitleFile("Film.sup", b"PG\xe9"), self.folder, "FA"), "rb") as handle:
+            self.assertEqual(handle.read(), b"PG\xe9")
 
     def test_safe_name(self):
         self.assertEqual(archive.safe_name("../a/b/Film: Part 1?.SRT"), "Film_ Part 1.srt")

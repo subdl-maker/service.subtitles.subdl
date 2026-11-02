@@ -11,11 +11,15 @@ Phases:
   mock         api.subdl.com and dl.subdl.com answered by mock_subdl.py: film search,
                download and the subtitle loaded in the player; an episode taken out of
                a season pack; the daily-limit dialog; the "Check my API key" button
+  live         the REAL api.subdl.com with a real key from $SUBDL_LIVE_KEY (run only when
+               asked for by name): film and episode searched by file name, a subtitle
+               downloaded and loaded for each. Uses two of the key's daily downloads.
 
 Writes screenshots and report.json to /harness/out and exits 1 if a check failed.
 """
 
 import base64
+import glob
 import json
 import os
 import re
@@ -337,9 +341,72 @@ def phase_mock():
     stop_kodi()
 
 
+def saved_subtitles(video):
+    stem = os.path.splitext(video)[0]
+    return [path for path in glob.glob(glob.escape(stem) + ".*") if path != video]
+
+
+def live_rows_and_download(video, label):
+    for path in saved_subtitles(video):  # an earlier phase may have saved one under the same name
+        os.remove(path)
+    rows = search_dialog_rows(video)
+    shot("13-live-%s-results" % label)
+    note("live %s rows" % label, rows)
+    check("live %s: SubDL lists subtitles in Kodi's languages" % label,
+          rows and all(row["Label"] in ("Persian", "English") for row in rows), [row["Label"] for row in rows])
+    take_first_row()
+    new = wait_for(lambda: saved_subtitles(video), 30) or []
+    check("live %s: Kodi saved the first row's subtitle next to the video" % label, new,
+          [os.path.basename(path) for path in new])
+    text = None
+    if new:
+        with open(new[0], "rb") as handle:
+            try:
+                text = handle.read().decode("utf-8-sig")
+            except UnicodeDecodeError:
+                pass
+    check("live %s: the saved subtitle is UTF-8" % label, text is not None, os.path.basename(new[0]) if new else None)
+    if text is not None and ".fa." in os.path.basename(new[0]):
+        letters = re.findall(r"[\u0600-\u06ff]", text)
+        check("live %s: the Persian subtitle is in Persian letters" % label, len(letters) > 100,
+              len(letters))
+    time.sleep(2)
+    current = rpc("Player.GetProperties", {"playerid": 1, "properties": ["currentsubtitle"]})["result"]
+    check("live %s: Kodi plays with the downloaded subtitle" % label, current["currentsubtitle"].get("language"),
+          current)
+    # Pause on the first line that falls inside the 5-minute sample video.
+    cues = re.findall(r"(\d\d):(\d\d):(\d\d)[,.](\d{3}) -->", text or "")
+    starts = [int(h) * 3600 + int(m) * 60 + int(sec) + int(ms) / 1000 for h, m, sec, ms in cues]
+    start = next((value for value in starts if 3 <= value < 290), None)
+    if start is not None:
+        rpc("GUI.SetFullscreen", {"fullscreen": True})
+        at = int(start + 1)
+        rpc("Player.Seek", {"playerid": 1, "value": {"time": {"hours": 0, "minutes": at // 60, "seconds": at % 60}}})
+        time.sleep(1)
+        rpc("Player.PlayPause", {"playerid": 1, "play": False})
+        time.sleep(3)
+        shot("14-live-%s-on-screen" % label)
+        rpc("GUI.SetFullscreen", {"fullscreen": False})
+    stop_playing()
+
+
+def phase_live():
+    key = os.environ.get("SUBDL_LIVE_KEY", "").strip()
+    if not key:
+        raise SystemExit("the live phase needs a real key in SUBDL_LIVE_KEY")
+    point_subdl_at_mock(False)
+    set_key(key)
+    start_kodi()
+    live_rows_and_download(MOVIE, "film")
+    live_rows_and_download(EPISODE, "episode")
+    stop_kodi()
+
+
 def requests_and_log_checks():
-    with open(OUT + "/requests.jsonl") as handle:
-        requests = [json.loads(line) for line in handle if line.strip()]
+    requests = []
+    if os.path.exists(OUT + "/requests.jsonl"):
+        with open(OUT + "/requests.jsonl") as handle:
+            requests = [json.loads(line) for line in handle if line.strip()]
     note("mock requests", requests)
     agent = re.compile(r"^SubDL-Kodi/\d+\.\d+\.\d+ \(service\.subtitles\.subdl; Kodi/\d+\.\d+; \w+\)$")
     if requests:
@@ -355,8 +422,9 @@ def requests_and_log_checks():
         log = handle.read()
     ours = [line for line in log.splitlines() if "[%s]" % ADDON in line]
     note("add-on log lines", ours)
+    live_key = os.environ.get("SUBDL_LIVE_KEY", "").strip() or KEY
     check("the add-on's log lines hold no key, address, title or file name",
-          not any(KEY in line or "Matrix" in line or "Breaking" in line or "http" in line for line in ours),
+          not any(KEY in line or live_key in line or "Matrix" in line or "Breaking" in line or "http" in line for line in ours),
           len(ours))
     check("no Python traceback from the add-on",
           not re.search(r"Traceback[^\n]*\n(?:[^\n]*\n){0,6}[^\n]*%s" % re.escape(ADDON), log), None)
@@ -374,6 +442,8 @@ def main():
             phase_refused_key()
         if "mock" in phases:
             phase_mock()
+        if "live" in phases:
+            phase_live()
         requests_and_log_checks()
     finally:
         stop_kodi()

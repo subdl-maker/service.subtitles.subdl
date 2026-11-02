@@ -233,7 +233,7 @@ def download(addon, handle: int, params: dict) -> None:
         return
     folder = fresh_folder(addon)
     for subtitle in chosen:
-        saved = archive.write(subtitle, folder)
+        saved = archive.write(subtitle, folder, params.get("lang", ""))
         xbmcplugin.addDirectoryItem(handle=handle, url=saved, listitem=xbmcgui.ListItem(label=saved),
                                     isFolder=False)
     log("download: %d file(s) handed to Kodi" % len(chosen))

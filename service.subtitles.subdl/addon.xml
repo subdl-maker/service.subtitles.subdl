@@ -15,6 +15,7 @@
     <news>1.0.0
 - First release: search by IMDb or TMDB id, title, season and episode, or release name
 - Episodes taken out of season packs, best release match listed first
+- Subtitles in older code pages (for example Persian Windows-1256) converted to UTF-8
 - Clear messages when the API key is missing or a daily limit is reached</news>
     <platform>all</platform>
     <license>MIT</license>

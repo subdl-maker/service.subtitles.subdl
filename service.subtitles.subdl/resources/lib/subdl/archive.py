@@ -8,6 +8,7 @@ the chosen files are written, under names this module makes safe.
 
 from __future__ import annotations
 
+import codecs
 import io
 import os
 import re
@@ -15,7 +16,7 @@ import zipfile
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Sequence, Tuple
 
-from . import releases
+from . import languages, releases
 
 #: Formats Kodi plays, best first when one archive offers the same subtitle twice.
 SUBTITLE_FORMATS = (".srt", ".ass", ".ssa", ".vtt", ".smi", ".sami", ".sub", ".sup", ".txt", ".mpl")
@@ -25,6 +26,30 @@ MAX_ENTRIES = 2000
 _TIMING = re.compile(rb"\d\d:\d\d:\d\d[,.:]\d|\{\d+\}\{\d+\}|\[\d+\]\[\d+\]")
 _CD = re.compile(r"(?:cd|disc|disk|part)[ ._-]?(\d)", re.I)
 _UNSAFE = re.compile(r"[^\w\-. ()\[\]]+", re.U)
+#: Text formats whose bytes may be re-encoded; .sub only when it is MicroDVD text.
+_TEXT_FORMATS = (".srt", ".ass", ".ssa", ".vtt", ".smi", ".sami", ".txt", ".mpl")
+_BOMS = (codecs.BOM_UTF8, codecs.BOM_UTF32_LE, codecs.BOM_UTF32_BE, codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
+#: The code page a subtitle in this language most likely uses when it is not UTF-8.
+#: Kodi reads a file without a BOM in its own subtitle charset (Windows-1252 unless the
+#: viewer changed it), so a Persian Windows-1256 file shows as "ÈÇíÏ" instead of "باید".
+_LEGACY_CODEC = {
+    "ar": "cp1256", "fa": "cp1256", "ur": "cp1256",
+    "he": "cp1255", "el": "cp1253", "tr": "cp1254", "az": "cp1254",
+    "ru": "cp1251", "uk": "cp1251", "bg": "cp1251", "be": "cp1251", "mk": "cp1251",
+    "kk": "cp1251", "ky": "cp1251", "mn": "cp1251",
+    "cs": "cp1250", "sk": "cp1250", "pl": "cp1250", "hu": "cp1250", "ro": "cp1250",
+    "hr": "cp1250", "sl": "cp1250", "bs": "cp1250", "sq": "cp1250", "sr": "cp1250",
+    "lt": "cp1257", "lv": "cp1257", "et": "cp1257",
+    "vi": "cp1258", "th": "cp874", "ja": "cp932", "ko": "cp949", "zh": "gb18030",
+    "en": "cp1252", "fr": "cp1252", "de": "cp1252", "es": "cp1252", "it": "cp1252",
+    "pt": "cp1252", "pb": "cp1252", "nl": "cp1252", "da": "cp1252", "sv": "cp1252",
+    "no": "cp1252", "fi": "cp1252", "ca": "cp1252", "eu": "cp1252", "gl": "cp1252",
+    "id": "cp1252", "ms": "cp1252", "is": "cp1252", "ga": "cp1252", "tl": "cp1252",
+}
+#: SubDL codes whose script differs from the rest of their Kodi language.
+_LEGACY_CODEC_BY_CODE = {"SR_CYRL": "cp1251", "ZH_BG": "big5"}
+#: Windows-1256 has no Persian yeh or keheh; Persian files use the Arabic letters.
+_PERSIAN_LETTERS = {0x064A: 0x06CC, 0x0643: 0x06A9}
 
 
 class ArchiveError(Exception):
@@ -197,11 +222,46 @@ def choose(files: Sequence[SubtitleFile], video: str = "",
     return [ranked[picked]] if 0 <= picked < len(ranked) else []
 
 
-def write(subtitle: SubtitleFile, folder: str) -> str:
-    """Write a chosen file (and its .idx) into ``folder``; returns the subtitle's path."""
+def is_text(subtitle: SubtitleFile) -> bool:
+    """True for a text subtitle; VobSub .sub/.idx and .sup pictures are binary."""
+    if subtitle.extension == ".sub":
+        return subtitle.idx is None and looks_like_subtitle(subtitle.data)
+    return subtitle.extension in _TEXT_FORMATS
+
+
+def as_utf8(data: bytes, language: str) -> bytes:
+    """UTF-8 bytes (with a BOM, so every Kodi reads them as UTF-8) for a text subtitle
+    in its language's legacy code page. Files that are already UTF-8 or carry a BOM,
+    and files in a language without one likely code page, are returned unchanged."""
+    if data.startswith(_BOMS):
+        return data
+    try:
+        data.decode("utf-8")
+        return data
+    except UnicodeDecodeError:
+        pass
+    code = languages.normalise(language)
+    codec = _LEGACY_CODEC_BY_CODE.get(code) or _LEGACY_CODEC.get(languages.iso_for(code))
+    if not codec:
+        return data
+    try:
+        text = data.decode(codec)
+    except UnicodeDecodeError:
+        return data
+    if languages.iso_for(code) == "fa":
+        text = text.translate(_PERSIAN_LETTERS)
+    return codecs.BOM_UTF8 + text.encode("utf-8")
+
+
+def write(subtitle: SubtitleFile, folder: str, language: str = "") -> str:
+    """Write a chosen file (and its .idx) into ``folder``; returns the subtitle's path.
+
+    A text subtitle that is not UTF-8 is converted from ``language``'s code page.
+    """
     path = os.path.join(folder, subtitle.name)
+    data = as_utf8(subtitle.data, language) if is_text(subtitle) else subtitle.data
     with open(path, "wb") as handle:
-        handle.write(subtitle.data)
+        handle.write(data)
     if subtitle.idx is not None:
         with open(os.path.splitext(path)[0] + ".idx", "wb") as handle:
             handle.write(subtitle.idx)

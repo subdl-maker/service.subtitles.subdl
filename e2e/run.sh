@@ -4,6 +4,7 @@
 #   sh e2e/run.sh                   Kodi 21 (Debian trixie)
 #   sh e2e/run.sh ubuntu:22.04      Kodi 19 (the oldest Kodi the add-on supports)
 #   sh e2e/run.sh debian:trixie mock    one phase only (missing_key, refused_key, mock)
+#   SUBDL_LIVE_KEY=... sh e2e/run.sh debian:trixie live    against the real API with a real key
 #
 # Needs a running Docker daemon (on a Mac: `colima start`). Screenshots and
 # report.json land in e2e/out/<image>/. The refused-key phase sends one request with
@@ -28,7 +29,7 @@ for file in setup.sh drive.py mock_subdl.py; do
 done
 docker exec "$NAME" sh /harness/setup.sh
 status=0
-docker exec "$NAME" python3 /harness/drive.py "$@" || status=$?
+docker exec -e SUBDL_LIVE_KEY "$NAME" python3 /harness/drive.py "$@" || status=$?
 rm -rf "$OUT"
 mkdir -p "$(dirname "$OUT")"
 docker cp "$NAME:/harness/out" "$OUT"

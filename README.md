@@ -113,7 +113,20 @@ refused-key dialog.
   repository does not exist yet, and Cloudflare answers the checker's request to
   subdl.com with 403. See [SUBMISSION.md](SUBMISSION.md).
 - Real Kodi: `e2e/run.sh` passes 20 of 20 checks on Kodi 21.2 and on Kodi 19.4.
-- Not verified: a search and download against the live API with a real key.
+- Live API (2026-11-01, a real free key): `SUBDL_LIVE_KEY=... sh e2e/run.sh <image> live`
+  passes 8 of 8 checks on Kodi 21.2 and Kodi 19.4. A film and an episode found by
+  file name, the first row downloaded (the episode out of a season pack), and Kodi
+  plays each subtitle. Two findings:
+  - **Persian subtitles in Windows-1256 showed as garbled text** ("ÈÇíÏ ÇÒ" for
+    "باید از"): Kodi reads a non-UTF-8 file in its own default code page. Fixed
+    the same day: `archive.as_utf8` converts a text subtitle that is not UTF-8
+    from its language's legacy code page to UTF-8 with a BOM (Persian also gets
+    the Persian yeh and keheh). UTF-8 files and binary formats pass unchanged.
+    The live step then checks the saved file is UTF-8 and shows a real line on
+    screen: 12 of 12 on Kodi 21.2 and 19.4.
+  - The Matrix (sd_id 21581) has Persian music-video subtitles filed under it
+    (Pitbull, Lady Gaga…). SubDL data, not the add-on: the API returns them for
+    the IMDb id too.
 
 ### Layout
 

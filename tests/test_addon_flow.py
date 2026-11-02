@@ -210,6 +210,14 @@ class DownloadTest(FlowTest):
         self.assertEqual(os.path.basename(path), MATRIX + ".srt")
         self.assertEqual(os.path.dirname(os.path.dirname(path)), os.path.join(self.profile, "temp"))
 
+    def test_legacy_persian_subtitle_reaches_kodi_as_utf8(self):
+        self.play_film()
+        legacy = "1\r\n00:00:01,000 --> 00:00:02,000\r\nبايد از اينجا برويم.\r\n".encode("cp1256")
+        archive_bytes = zip_bytes({MATRIX + ".srt": legacy})
+        self.run_addon("action=download&path=%2Fsubtitle%2F3-1003.zip&lang=FA", response(200, archive_bytes))
+        path, data = self.downloaded()
+        self.assertEqual(data, "\ufeff1\r\n00:00:01,000 --> 00:00:02,000\r\nباید از اینجا برویم.\r\n".encode("utf-8"))
+
     def test_single_file_from_a_pack(self):
         self.play_episode()
         answer = response(200, SRT, {"Content-Disposition": "attachment; filename=\"Breaking.Bad.S01E05.srt\""})
